@@ -6,7 +6,6 @@ import io
 # LangChain & Gemini Imports (No Memory Module needed)
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
-from langchain.agents import AgentType
 
 # --- PAGE SETUP ---
 st.set_page_config(
