@@ -15,13 +15,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- PROFESSIONAL CSS (Your Preferred Style) ---
+# --- PROFESSIONAL CSS (From your working snippet) ---
 st.markdown("""
     <style>
     .stApp {
         background: linear-gradient(-45deg, #020617, #0f172a, #1e1b4b, #312e81);
         background-size: 400% 400%;
-        animation: gradientBG 15s ease infinite;
+        animation: gradientBG 12s ease infinite;
     }
     @keyframes gradientBG {
         0% { background-position: 0% 50%; }
@@ -31,43 +31,48 @@ st.markdown("""
     .stChatMessage {
         background-color: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(15px);
         border-radius: 15px;
+        margin-bottom: 10px;
+    }
+    .stChatMessage .stMarkdown {
+        color: #f8fafc !important;
     }
     h1, h2, h3, p, label { color: #f8fafc !important; font-family: 'Inter', sans-serif; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR CONFIGURATION (Fixed Duplicate ID Bug) ---
+# --- SIDEBAR CONFIGURATION (CRITICAL FIX FOR DUPLICATE ID) ---
+# We define the widget ONCE here to avoid 'DuplicateElementId' errors
 with st.sidebar:
     st.header("⚙️ Configuration")
     
-    # 1. API Key Input (Created ONCE here to prevent crash)
-    api_key_input = st.text_input("Gemini API Key", type="password", key="api_key_input")
+    # 1. API Key Input
+    api_key_input = st.text_input("Gemini API Key", type="password", key="gemini_api_key_sidebar")
     
-    # 2. Handle Secrets Fallback
-    if not api_key_input and "GOOGLE_API_KEY" in st.secrets:
-        api_key_input = st.secrets["GOOGLE_API_KEY"]
-    
-    # 3. Set Environment Variable
+    # 2. Logic to set key
     if api_key_input:
         os.environ["GOOGLE_API_KEY"] = api_key_input
+    elif "GOOGLE_API_KEY" in st.secrets:
+        os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
     st.markdown("---")
     
-    # 4. File Uploader
-    uploaded_file = st.file_uploader("Upload CSV Data", type="csv")
+    # 3. File Uploader
+    uploaded_file = st.file_uploader("Upload Business Dataset (CSV)", type="csv")
     
-    # 5. Reset Button
+    # 4. Reset Button
     if st.button("🗑️ Reset Conversation"):
         st.session_state.messages = []
         st.rerun()
 
 # --- HELPER FUNCTIONS ---
 def get_llm():
-    """Returns the LLM instance only if key is set."""
+    """
+    Returns the LLM instance using the EXACT model string that works for you.
+    """
     if "GOOGLE_API_KEY" in os.environ:
-        # UPDATED: Using the model confirmed by your debug script
+        # CRITICAL UPDATE: Using gemini-2.5-flash as requested
         return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
     return None
 
@@ -81,13 +86,15 @@ def robust_load_csv(file):
     return None
 
 def get_history_context():
-    """Builds conversation history string for the agent."""
+    """
+    Manually builds conversation history string for the agent.
+    This enables 'Multi-Question' memory without crashing Streamlit.
+    """
     if "messages" not in st.session_state: return ""
     context = ""
     # Use last 6 messages for context
     for msg in st.session_state.messages[-6:]:
         role = "User" if msg["role"] == "user" else "AI"
-        # Only text, skip binary image data
         if "content" in msg:
             context += f"{role}: {msg['content']}\n"
     return context
@@ -100,16 +107,16 @@ def create_agent(df):
     history = get_history_context()
     
     prefix = f"""
-    You are an expert BI Analyst.
+    You are an expert BI Analyst and Strategic Advisor.
     
-    ### CONVERSATION HISTORY:
+    ### CONVERSATION HISTORY (Use this for context on "previous" questions):
     {history}
     
     ### INSTRUCTIONS:
-    1. Answer the user's question using the dataframe 'df'.
-    2. If the user says "it" or "previous", refer to the HISTORY above.
-    3. If you generate a plot, save it as 'insight_plot.png'.
-    4. Be concise and business-focused.
+    1. Answer the user's NEW question using the dataframe 'df'.
+    2. If the user refers to "it", "that", or "previous", use the HISTORY above.
+    3. If you generate a plot, save it strictly as 'insight_plot.png'.
+    4. Provide clear, business-oriented insights.
     """
     
     return create_pandas_dataframe_agent(
@@ -123,6 +130,7 @@ def create_agent(df):
 
 # --- MAIN APP LOGIC ---
 st.title("💎 InsightStream AI")
+st.markdown("##### Next-Gen Autonomous Strategy & Data Intelligence")
 
 # Initialize Chat History
 if "messages" not in st.session_state:
@@ -139,7 +147,7 @@ elif uploaded_file:
         st.session_state.messages = [] # Reset on new file
     
     # Display Data Preview
-    with st.expander("👁 View Dataset"):
+    with st.expander("👁 View Raw Data Stream"):
         st.dataframe(st.session_state.df.head(5), use_container_width=True)
 
     # 1. Render Chat History
@@ -150,15 +158,15 @@ elif uploaded_file:
             if "image" in msg and msg["image"]:
                 st.image(msg["image"])
                 st.download_button(
-                    "⬇️ Download", 
+                    "⬇️ Download Plot", 
                     msg["image"], 
                     file_name=f"plot_{i}.png", 
                     mime="image/png",
                     key=f"btn_{i}"
                 )
 
-    # 2. User Input Handling
-    if query := st.chat_input("Ask a question about your data..."):
+    # 2. User Input Handling (Chat Interface)
+    if query := st.chat_input("Ask a strategic question about your data..."):
         # Display User Message
         st.session_state.messages.append({"role": "user", "content": query})
         with st.chat_message("user"):
@@ -166,7 +174,7 @@ elif uploaded_file:
 
         # Generate AI Response
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
+            with st.spinner("🧠 Reasoning..."):
                 agent = create_agent(st.session_state.df)
                 if agent:
                     try:
@@ -180,6 +188,7 @@ elif uploaded_file:
                             with open("insight_plot.png", "rb") as f:
                                 img_bytes = f.read()
                             st.image(img_bytes)
+                            st.download_button("⬇️ Download Plot", img_bytes, "insight_plot.png", "image/png")
                             os.remove("insight_plot.png")
                         
                         st.markdown(response)
