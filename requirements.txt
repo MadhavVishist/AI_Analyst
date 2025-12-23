@@ -1,7 +1,8 @@
-streamlit
-pandas
-langchain-google-genai
-langchain
+streamlit>=1.30.0
+pandas>=2.0.0
+langchain>=0.3.0
+langchain-community
+langchain-google-genai>=2.0.0
 langchain-experimental
 matplotlib
 seaborn
