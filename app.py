@@ -3,7 +3,6 @@ import pandas as pd
 import os
 
 # LangChain & Gemini Imports
-# Note: We rely on the core libraries to avoid "ModuleNotFound" for memory
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from langchain_core.prompts import ChatPromptTemplate
@@ -16,7 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- PROFESSIONAL CSS ---
+# --- PROFESSIONAL CSS (Your Preferred Style) ---
 st.markdown("""
     <style>
     .stApp {
@@ -29,37 +28,30 @@ st.markdown("""
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
     }
-    .glass-container {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        margin-bottom: 20px;
-    }
     .stChatMessage {
         background-color: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
         border-radius: 15px;
     }
     h1, h2, h3, p, label { color: #f8fafc !important; font-family: 'Inter', sans-serif; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR CONFIGURATION (WIDGETS CREATED ONCE HERE) ---
+# --- SIDEBAR CONFIGURATION (Fixed Duplicate ID Bug) ---
 with st.sidebar:
     st.header("⚙️ Configuration")
     
-    # 1. API Key Input (Fixed: Created only once)
-    api_key = st.text_input("Gemini API Key", type="password", key="api_key_input")
+    # 1. API Key Input (Created ONCE here to prevent crash)
+    api_key_input = st.text_input("Gemini API Key", type="password", key="api_key_input")
     
     # 2. Handle Secrets Fallback
-    if not api_key and "GOOGLE_API_KEY" in st.secrets:
-        api_key = st.secrets["GOOGLE_API_KEY"]
+    if not api_key_input and "GOOGLE_API_KEY" in st.secrets:
+        api_key_input = st.secrets["GOOGLE_API_KEY"]
     
     # 3. Set Environment Variable
-    if api_key:
-        os.environ["GOOGLE_API_KEY"] = api_key
+    if api_key_input:
+        os.environ["GOOGLE_API_KEY"] = api_key_input
 
     st.markdown("---")
     
@@ -75,8 +67,8 @@ with st.sidebar:
 def get_llm():
     """Returns the LLM instance only if key is set."""
     if "GOOGLE_API_KEY" in os.environ:
-        # Using the stable model ID
-        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+        # UPDATED: Using the model confirmed by your debug script
+        return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
     return None
 
 def robust_load_csv(file):
@@ -148,7 +140,7 @@ elif uploaded_file:
     
     # Display Data Preview
     with st.expander("👁 View Dataset"):
-        st.dataframe(st.session_state.df.head(5), width="stretch") # Fixed deprecated param
+        st.dataframe(st.session_state.df.head(5), use_container_width=True)
 
     # 1. Render Chat History
     for i, msg in enumerate(st.session_state.messages):
