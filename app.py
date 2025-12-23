@@ -3,54 +3,57 @@ import pandas as pd
 import os
 import io
 
-# LangChain & Gemini Imports (No Memory Module needed)
+# LangChain & Gemini Integration
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
-# --- PAGE SETUP ---
+# --- UI CONFIGURATION ---
 st.set_page_config(
-    page_title="InsightStream | Pro AI Analyst",
-    page_icon="🧠",
+    page_title="InsightStream | Autonomous Data Intelligence",
+    page_icon="💎",
     layout="wide"
 )
 
-# --- CSS STYLING ---
+# Professional CSS: Animated Gradient Background & Glassmorphism
 st.markdown("""
     <style>
     .stApp {
-        background: linear-gradient(-45deg, #0f172a, #1e1b4b, #312e81, #1e3a8a);
+        background: linear-gradient(-45deg, #020617, #0f172a, #1e1b4b, #312e81);
         background-size: 400% 400%;
-        animation: gradient 15s ease infinite;
+        animation: gradientBG 12s ease infinite;
     }
-    @keyframes gradient {
+    @keyframes gradientBG {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
     }
+    /* Chat Message Styling */
     .stChatMessage {
         background-color: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(15px);
         border-radius: 15px;
+        margin-bottom: 10px;
     }
-    h1, h2, h3, p, label { color: #f8fafc !important; }
+    .stChatMessage .stMarkdown {
+        color: #f8fafc !important;
+    }
+    h1, h2, h3, p, label { color: #f8fafc !important; font-family: 'Inter', sans-serif; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- CORE LOGIC ---
+# --- LOGIC ENGINE ---
 def get_llm():
-    # API Key Handling
-    if "GOOGLE_API_KEY" not in os.environ:
-        key = st.sidebar.text_input("Gemini API Key", type="password") or st.secrets.get("GOOGLE_API_KEY")
-        if key:
-            os.environ["GOOGLE_API_KEY"] = key
-        else:
-            return None
-    # Using the stable model ID
-    return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+    key = st.sidebar.text_input("Gemini API Key", type="password") or st.secrets.get("GOOGLE_API_KEY")
+    if key:
+        os.environ["GOOGLE_API_KEY"] = key
+        # Using the specific model that worked for you
+        return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+    return None
 
 def robust_load_csv(file):
-    # Fix for UnicodeDecodeError
     for enc in ['utf-8', 'latin1', 'cp1252', 'iso-8859-1']:
         try:
             file.seek(0)
@@ -58,131 +61,134 @@ def robust_load_csv(file):
         except: continue
     return None
 
-def get_chat_history_str():
+def get_history_context():
     """
-    Manually builds a history string to feed into the agent's prompt.
-    This avoids importing the unstable Memory modules.
+    Manually creates a string of the conversation history.
+    This replaces 'langchain.memory' to avoid import errors.
     """
-    if "messages" not in st.session_state:
-        return ""
-    
-    history_text = ""
-    # We take the last 6 messages to keep context fresh but concise
+    if "messages" not in st.session_state: return ""
+    context = ""
+    # Limit to last 6 turns to keep token usage efficient
     for msg in st.session_state.messages[-6:]:
-        role = msg["role"].upper()
-        content = msg["content"]
-        history_text += f"{role}: {content}\n"
-    return history_text
+        role = "User" if msg["role"] == "user" else "AI Analyst"
+        # Only include text content in context, not image bytes
+        context += f"{role}: {msg['content']}\n"
+    return context
 
-def create_agent(df):
+def create_conversational_agent(df):
     llm = get_llm()
     if not llm: return None
-
-    # Inject History directly into the System Prompt
-    history_context = get_chat_history_str()
+    
+    # Inject History into Prompt
+    history = get_history_context()
     
     prefix = f"""
-    You are an expert conversational Data Analyst.
+    You are an expert BI Analyst and Strategic Advisor.
     
-    ### CONVERSATION HISTORY (Use this context for follow-up questions):
-    {history_context}
+    ### CONVERSATION HISTORY (Use this for context):
+    {history}
     
     ### INSTRUCTIONS:
-    1. Answer the user's current question based on the dataframe 'df'.
-    2. If the user refers to "it" or "previous", check the CONVERSATION HISTORY above.
-    3. If you create a plot, save it strictly as 'insight_plot.png'.
-    4. Verify data types before plotting.
+    1. Answer the user's NEW question based on the dataframe 'df'.
+    2. If the user refers to "it", "that", or "previous", use the HISTORY above.
+    3. If asked to plot, save the chart as 'insight_plot.png'.
+    4. Provide clear, business-oriented insights.
     """
-
+    
     return create_pandas_dataframe_agent(
-        llm,
-        df,
-        verbose=True,
-        allow_dangerous_code=True,
-        handle_parsing_errors=True,
-        prefix=prefix
+        llm, df, verbose=True, allow_dangerous_code=True, 
+        handle_parsing_errors=True, prefix=prefix
     )
 
-# --- MAIN APP UI ---
-st.title("🧠 InsightStream Pro")
-st.caption("Autonomous AI Data Agent with Memory")
+# --- MAIN APP FLOW ---
+llm = get_llm()
 
-# Sidebar
+st.title("💎 InsightStream AI")
+st.markdown("##### Next-Gen Autonomous Strategy & Data Intelligence")
+
+# 1. Sidebar & Data Loading
 with st.sidebar:
-    st.header("🗂 Data Settings")
-    uploaded_file = st.file_uploader("Upload CSV", type="csv")
-    if st.button("🗑️ Clear Chat History"):
+    st.header("🗂 Data Control")
+    uploaded_file = st.file_uploader("Upload Business Dataset (CSV)", type="csv")
+    if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
 
-# Session State
+# Initialize Chat History
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # Logic
-if uploaded_file:
-    # Load Data (Once)
-    if "current_file" not in st.session_state or st.session_state.current_file != uploaded_file.name:
+if not llm:
+    st.warning("⚠️ Please provide your Gemini API Key in the sidebar.")
+elif uploaded_file:
+    # Load Data Once
+    if "df" not in st.session_state or st.session_state.get("file_name") != uploaded_file.name:
         st.session_state.df = robust_load_csv(uploaded_file)
-        st.session_state.current_file = uploaded_file.name
-        st.session_state.messages = [] # Reset chat on new file
+        st.session_state.file_name = uploaded_file.name
+        st.session_state.messages = [] # Reset chat on new file load
+    
+    # Display Data Preview (Collapsible)
+    with st.expander("👁 View Raw Data Stream"):
+        st.dataframe(st.session_state.df.head(5), use_container_width=True)
 
-    # 1. Display Chat History
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            # Restore Image if it exists in history
-            if "image_data" in message and message["image_data"]:
-                st.image(message["image_data"])
+    # 2. Chat Interface (Loop through history)
+    for i, msg in enumerate(st.session_state.messages):
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            # Render Image if available in history
+            if "image" in msg and msg["image"]:
+                st.image(msg["image"], caption="AI Generated Insight")
                 st.download_button(
                     label="⬇️ Download Plot",
-                    data=message["image_data"],
-                    file_name=f"plot_{len(message['content'][:5])}.png",
+                    data=msg["image"],
+                    file_name=f"insight_plot_{i}.png",
                     mime="image/png",
-                    key=f"hist_btn_{message['id']}"
+                    key=f"dl_{i}"
                 )
 
-    # 2. Handle New Input
-    if prompt := st.chat_input("Ask about your data..."):
-        # Show User Message
-        st.session_state.messages.append({"role": "user", "content": prompt, "id": len(st.session_state.messages)})
+    # 3. User Input
+    if query := st.chat_input("Ask a strategic question about your data..."):
+        # Add User Message
+        st.session_state.messages.append({"role": "user", "content": query})
         with st.chat_message("user"):
-            st.markdown(prompt)
+            st.markdown(query)
 
-        # Generate Assistant Response
+        # Generate Response
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing data..."):
-                agent = create_agent(st.session_state.df)
+            with st.spinner("🧠 Reasoning..."):
+                agent = create_conversational_agent(st.session_state.df)
                 if agent:
                     try:
-                        # Run Agent
-                        response = agent.invoke({"input": prompt})
-                        output_text = response["output"]
+                        # Invoke Agent
+                        result = agent.invoke({"input": query})
+                        response_text = result["output"]
                         
-                        # Handle Image Logic
+                        # IMAGE HANDLING LOGIC
                         img_bytes = None
                         if os.path.exists("insight_plot.png"):
+                            # Read file into memory
                             with open("insight_plot.png", "rb") as f:
                                 img_bytes = f.read()
-                            # Show Image
-                            st.image(img_bytes)
+                            
+                            # Display immediately
+                            st.image(img_bytes, caption="AI Generated Insight")
                             st.download_button("⬇️ Download Plot", img_bytes, "insight_plot.png", "image/png")
-                            os.remove("insight_plot.png") # Cleanup
+                            
+                            # Clean up disk
+                            os.remove("insight_plot.png")
 
-                        st.markdown(output_text)
+                        # Display Text
+                        st.markdown(response_text)
 
-                        # Save to History
+                        # SAVE TO HISTORY (Persist Image Bytes)
                         st.session_state.messages.append({
                             "role": "assistant",
-                            "content": output_text,
-                            "image_data": img_bytes,
-                            "id": len(st.session_state.messages)
+                            "content": response_text,
+                            "image": img_bytes
                         })
                         
                     except Exception as e:
-                        st.error(f"Analysis Error: {e}")
-                else:
-                    st.error("Please enter your API Key in the sidebar.")
-
+                        st.error(f"Reasoning Error: {e}")
 else:
-    st.info("👋 Please upload a CSV file to begin.")
+    st.info("👋 Upload a CSV file to activate the Autonomous Agent.")
