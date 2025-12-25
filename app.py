@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
 import os
-import io  # <--- FIXED: Added this missing import
+import io
+import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from fpdf import FPDF
-import base64
+
+# Force Matplotlib to use non-interactive backend for server stability
+matplotlib.use('Agg')
 
 # LangChain & Gemini Imports
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -15,12 +18,12 @@ from langchain_core.output_parsers import StrOutputParser
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="InsightStream | Enterprise AI Analyst",
-    page_icon="🚀",
+    page_title="InsightStream | Strategic AI Analyst",
+    page_icon="📊",
     layout="wide"
 )
 
-# --- PROFESSIONAL CSS ---
+# --- PROFESSIONAL UI CSS ---
 st.markdown("""
     <style>
     .stApp {
@@ -36,7 +39,6 @@ st.markdown("""
         background-color: #3b82f6;
         color: white;
         border-radius: 8px;
-        border: none;
         transition: all 0.3s ease;
     }
     .stButton>button:hover {
@@ -47,9 +49,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR CONFIGURATION ---
+# --- SIDEBAR & CONFIG ---
 with st.sidebar:
-    st.header("⚙️ Settings")
+    st.header("⚙️ Configuration")
     api_key_input = st.text_input("Gemini API Key", type="password", key="api_key_sidebar")
     
     if api_key_input:
@@ -60,7 +62,7 @@ with st.sidebar:
     st.markdown("---")
     uploaded_file = st.file_uploader("Upload Dataset (CSV)", type="csv")
     
-    if st.button("🗑️ Reset All"):
+    if st.button("🗑️ Reset Analysis"):
         st.session_state.clear()
         st.rerun()
 
@@ -80,58 +82,66 @@ def robust_load_csv(file):
     return None
 
 def generate_eda_report(df):
-    """Generates a quick statistical summary."""
     buffer = io.StringIO()
     df.info(buf=buffer)
-    
-    eda_summary = {
+    return {
         "rows": df.shape[0],
         "columns": df.shape[1],
         "missing": df.isnull().sum().sum(),
         "duplicates": df.duplicated().sum(),
-        "numeric_cols": list(df.select_dtypes(include=['number']).columns),
-        "categorical_cols": list(df.select_dtypes(include=['object']).columns)
+        "numeric_cols": list(df.select_dtypes(include=['number']).columns)
     }
-    return eda_summary
 
 def export_chat_to_pdf():
-    """Compiles chat history into a PDF."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="InsightStream AI - Analysis Report", ln=True, align='C')
+    pdf.cell(200, 10, txt="InsightStream Analysis Report", ln=True, align='C')
     pdf.ln(10)
-
+    
     for msg in st.session_state.messages:
         role = "User" if msg["role"] == "user" else "AI Analyst"
-        # Sanitize text for PDF (latin-1 compatible)
-        clean_content = str(msg["content"]).encode('latin-1', 'replace').decode('latin-1')
-        
+        # Clean text for PDF
+        text = str(msg["content"]).encode('latin-1', 'replace').decode('latin-1')
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{role}:", ln=True)
         pdf.set_font("Arial", size=11)
-        pdf.multi_cell(0, 10, clean_content)
+        pdf.multi_cell(0, 10, text)
         pdf.ln(5)
-        
     return pdf.output(dest='S').encode('latin-1')
 
 def create_agent(df):
     llm = get_llm()
     if not llm: return None
     
-    # Simple history context
+    # Context from previous messages
     history = ""
     if "messages" in st.session_state:
         for msg in st.session_state.messages[-4:]:
             history += f"{msg['role']}: {msg['content']}\n"
     
+    # --- STRATEGIC BUSINESS PROMPT ---
     prefix = f"""
-    You are a Senior Data Scientist.
-    History: {history}
-    Instructions:
-    1. Analyze the dataframe 'df'.
-    2. If creating a plot, save as 'insight_plot.png'.
-    3. Be concise and business-focused.
+    You are a Senior Strategic Business Analyst. Your goal is to provide actionable insights, not just numbers.
+    
+    ### CONTEXT:
+    {history}
+    
+    ### INSTRUCTIONS:
+    1. **Analyze:** Use Python to query the dataframe 'df'.
+    2. **Visualize:** If a trend, comparison, or distribution is useful, create a plot.
+       - Use 'seaborn' or 'matplotlib'.
+       - **CRITICAL:** Save the plot as 'insight_plot.png'. 
+       - **DO NOT** use plt.show().
+       - Ensure labels, titles, and legends are clear and professional.
+    3. **Report:** Answer the user's question in this format:
+       - **Executive Summary:** One sentence overview.
+       - **Key Findings:** Bullet points with data evidence.
+       - **Business Implication:** Why this matters.
+    
+    ### ERROR HANDLING:
+    - If you cannot plot, explain why.
+    - If data is missing, mention it.
     """
     
     return create_pandas_dataframe_agent(
@@ -144,14 +154,13 @@ def create_agent(df):
     )
 
 # --- MAIN APP LOGIC ---
-st.title("🚀 InsightStream Enterprise")
+st.title("📊 InsightStream: Strategic AI Analyst")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if not os.environ.get("GOOGLE_API_KEY"):
-    st.warning("⚠️ Please enter your Gemini API Key in the sidebar.")
-
+    st.warning("⚠️ Please enter your Gemini API Key to proceed.")
 elif uploaded_file:
     # 1. Load Data
     if "df" not in st.session_state or st.session_state.get("current_file") != uploaded_file.name:
@@ -161,88 +170,82 @@ elif uploaded_file:
     
     df = st.session_state.df
 
-    # 2. Auto-EDA Panel (One-Click Report)
-    with st.expander("📊 Data Health Dashboard (Auto-Generated)", expanded=True):
-        col1, col2, col3, col4 = st.columns(4)
+    # 2. Auto-EDA Panel
+    with st.expander("🔎 Data Health Snapshot", expanded=False):
         eda = generate_eda_report(df)
-        col1.metric("Rows", eda["rows"])
-        col2.metric("Columns", eda["columns"])
-        col3.metric("Missing Values", eda["missing"])
-        col4.metric("Duplicates", eda["duplicates"])
-        
-        if st.checkbox("Show Correlation Heatmap"):
-            if eda["numeric_cols"]:
-                try:
-                    fig, ax = plt.subplots(figsize=(8, 4))
-                    sns.heatmap(df[eda["numeric_cols"]].corr(), annot=True, cmap='coolwarm', ax=ax)
-                    st.pyplot(fig)
-                except Exception as e:
-                    st.warning("Could not generate heatmap (data may be too sparse).")
-            else:
-                st.info("No numeric columns for correlation.")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Rows", eda["rows"])
+        c2.metric("Columns", eda["columns"])
+        c3.metric("Missing", eda["missing"])
+        c4.metric("Duplicates", eda["duplicates"])
 
-    # 3. Chat History
-    for i, msg in enumerate(st.session_state.messages):
+    # 3. Render Chat History
+    for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             if "image" in msg and msg["image"]:
                 st.image(msg["image"])
-    
-    # 4. PDF Export Button
+
+    # 4. PDF Export
     if st.session_state.messages:
         try:
-            pdf_bytes = export_chat_to_pdf()
-            st.sidebar.download_button("📥 Export Report to PDF", data=pdf_bytes, file_name="analysis_report.pdf", mime="application/pdf")
-        except Exception as e:
-            st.sidebar.error("Could not generate PDF (font issue).")
+            pdf_data = export_chat_to_pdf()
+            st.sidebar.download_button("📥 Download Report (PDF)", pdf_data, "analysis.pdf", "application/pdf")
+        except: pass
 
     # 5. User Input
-    if query := st.chat_input("Ask a question about your data..."):
+    if query := st.chat_input("Ask a strategic question..."):
         st.session_state.messages.append({"role": "user", "content": query})
         st.rerun()
 
-    # 6. Processing (Handling the latest user message)
+    # 6. Analysis Logic
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
+            with st.spinner("🧠 Analyzing business data..."):
+                # Clear old plots to avoid duplicates
+                plt.close('all')
+                if os.path.exists("insight_plot.png"):
+                    os.remove("insight_plot.png")
+                
                 agent = create_agent(df)
                 if agent:
                     try:
-                        last_query = st.session_state.messages[-1]["content"]
-                        result = agent.invoke({"input": last_query})
-                        response = result["output"]
+                        # Run Agent
+                        res = agent.invoke({"input": st.session_state.messages[-1]["content"]})
+                        response_text = res["output"]
                         
+                        # Capture Image if generated
                         img_bytes = None
                         if os.path.exists("insight_plot.png"):
                             with open("insight_plot.png", "rb") as f:
                                 img_bytes = f.read()
-                            st.image(img_bytes)
-                            os.remove("insight_plot.png")
+                            st.image(img_bytes, caption="Generated Insight")
                         
-                        st.markdown(response)
+                        st.markdown(response_text)
                         
-                        # Append Assistant Response
+                        # Save to History
                         st.session_state.messages.append({
-                            "role": "assistant",
-                            "content": response,
+                            "role": "assistant", 
+                            "content": response_text, 
                             "image": img_bytes
                         })
                         
-                        # 7. Smart Follow-up Buttons
-                        st.markdown("**Suggested Follow-ups:**")
-                        cols = st.columns(3)
-                        if cols[0].button("📈 Show Trends"):
-                            st.session_state.messages.append({"role": "user", "content": "Analyze the trends over time."})
+                        # Suggested Follow-ups
+                        st.markdown("---")
+                        st.markdown("**Suggested Next Steps:**")
+                        c1, c2, c3 = st.columns(3)
+                        if c1.button("📈 Trends"):
+                            st.session_state.messages.append({"role": "user", "content": "Show me the trends over time."})
                             st.rerun()
-                        if cols[1].button("💰 Analyze Profit"):
-                            st.session_state.messages.append({"role": "user", "content": "What are the most profitable segments?"})
+                        if c2.button("⚠️ Anomalies"):
+                            st.session_state.messages.append({"role": "user", "content": "Are there any outliers?"})
                             st.rerun()
-                        if cols[2].button("⚠️ Find Outliers"):
-                            st.session_state.messages.append({"role": "user", "content": "Identify any significant outliers in the data."})
+                        if c3.button("📊 Correlations"):
+                            st.session_state.messages.append({"role": "user", "content": "What variables are correlated?"})
                             st.rerun()
 
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        st.error(f"Analysis failed: {e}")
 
 else:
     st.info("👋 Upload a CSV file to begin.")
