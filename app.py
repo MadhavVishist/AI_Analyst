@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import io  # <--- FIXED: Added this missing import
 import matplotlib.pyplot as plt
 import seaborn as sns
 from fpdf import FPDF
@@ -36,6 +37,11 @@ st.markdown("""
         color: white;
         border-radius: 8px;
         border: none;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        background-color: #2563eb;
+        transform: scale(1.02);
     }
     h1, h2, h3 { color: #60a5fa !important; }
     </style>
@@ -77,7 +83,6 @@ def generate_eda_report(df):
     """Generates a quick statistical summary."""
     buffer = io.StringIO()
     df.info(buf=buffer)
-    info_str = buffer.getvalue()
     
     eda_summary = {
         "rows": df.shape[0],
@@ -99,7 +104,9 @@ def export_chat_to_pdf():
 
     for msg in st.session_state.messages:
         role = "User" if msg["role"] == "user" else "AI Analyst"
-        clean_content = msg["content"].encode('latin-1', 'replace').decode('latin-1')
+        # Sanitize text for PDF (latin-1 compatible)
+        clean_content = str(msg["content"]).encode('latin-1', 'replace').decode('latin-1')
+        
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{role}:", ln=True)
         pdf.set_font("Arial", size=11)
@@ -165,9 +172,12 @@ elif uploaded_file:
         
         if st.checkbox("Show Correlation Heatmap"):
             if eda["numeric_cols"]:
-                fig, ax = plt.subplots(figsize=(8, 4))
-                sns.heatmap(df[eda["numeric_cols"]].corr(), annot=True, cmap='coolwarm', ax=ax)
-                st.pyplot(fig)
+                try:
+                    fig, ax = plt.subplots(figsize=(8, 4))
+                    sns.heatmap(df[eda["numeric_cols"]].corr(), annot=True, cmap='coolwarm', ax=ax)
+                    st.pyplot(fig)
+                except Exception as e:
+                    st.warning("Could not generate heatmap (data may be too sparse).")
             else:
                 st.info("No numeric columns for correlation.")
 
@@ -180,8 +190,11 @@ elif uploaded_file:
     
     # 4. PDF Export Button
     if st.session_state.messages:
-        pdf_bytes = export_chat_to_pdf()
-        st.sidebar.download_button("📥 Export Report to PDF", data=pdf_bytes, file_name="analysis_report.pdf", mime="application/pdf")
+        try:
+            pdf_bytes = export_chat_to_pdf()
+            st.sidebar.download_button("📥 Export Report to PDF", data=pdf_bytes, file_name="analysis_report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.sidebar.error("Could not generate PDF (font issue).")
 
     # 5. User Input
     if query := st.chat_input("Ask a question about your data..."):
@@ -201,7 +214,6 @@ elif uploaded_file:
                         
                         img_bytes = None
                         if os.path.exists("insight_plot.png"):
-                            import io
                             with open("insight_plot.png", "rb") as f:
                                 img_bytes = f.read()
                             st.image(img_bytes)
@@ -216,7 +228,7 @@ elif uploaded_file:
                             "image": img_bytes
                         })
                         
-                        # 7. Smart Follow-up Buttons (Simple Logic)
+                        # 7. Smart Follow-up Buttons
                         st.markdown("**Suggested Follow-ups:**")
                         cols = st.columns(3)
                         if cols[0].button("📈 Show Trends"):
