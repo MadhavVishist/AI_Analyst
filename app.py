@@ -10,7 +10,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="InsightStream | AI Analyst",
+    page_title="AI Analyst",
     page_icon="💎",
     layout="wide"
 )
@@ -113,7 +113,7 @@ def create_agent(df):
     )
 
 # --- MAIN APP LOGIC ---
-st.title("💎 InsightStream AI")
+st.title("💎 AI Data Analyst (business insights from your data)")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
