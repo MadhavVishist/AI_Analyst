@@ -45,7 +45,7 @@ st.markdown("""
 # --- SIDEBAR CONFIGURATION ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    api_key_input = st.text_input("Gemini API Key", type="password", key="gemini_api_key_sidebar")
+    api_key_input = st.text_input("Gemini API Key (optional)", type="password", key="gemini_api_key_sidebar")
     
     if api_key_input:
         os.environ["GOOGLE_API_KEY"] = api_key_input
@@ -53,7 +53,7 @@ with st.sidebar:
         os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
     st.markdown("---")
-    uploaded_file = st.file_uploader("Upload Business Dataset (CSV)", type="csv")
+    uploaded_file = st.file_uploader("Upload Dataset (CSV)", type="csv")
     
     if st.button("🗑️ Reset Conversation"):
         st.session_state.messages = []
